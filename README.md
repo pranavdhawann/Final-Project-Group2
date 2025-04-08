@@ -6,3 +6,4 @@ DATS 6303 Final Project
 - **Group-Proposal/**: Contains the project proposal.
 - **Final-Group-Project-Report/**: Contains the final project report.
 - **Final-Group-Presentation/**: Contains group presentation.
+- **Code/**: Contains all the source code for the final project.
