@@ -20,3 +20,6 @@ It contains all source code related to the final group project.
 - (IN AWS Terminal) `ls` and check if this file is uploaded into your AWS project folder as well
 - (IN AWS Terminal) in project folder run `chmod +x setup_dataset.sh` then execute `./setup_dataset.sh`
 -  Previous execution should take a lot of time to download and unzip the dataset from kaggle and unzip it, grab a coffee meanwhile.
+
+## PIP install issue in AWS
+- If you are not able to download external pip packages run this on AWS terminal `sudo rm /usr/lib/python3.12/EXTERNALLY-MANAGED`
