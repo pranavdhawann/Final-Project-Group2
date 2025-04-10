@@ -18,5 +18,22 @@ It contains all source code related to the final group project.
 - Go to your Kaggle account section and `Create New Token` this should download `kaggle.json` file to your system
 - Move this into your local project folder amd rename it to `kaggle.json` and then upload to AWS deployment
 - (IN AWS Terminal) `ls` and check if this file is uploaded into your AWS project folder as well
-- (IN AWS Terminal) in project folder run `chmod +x setup_dataset.sh` then execute `./setup_dataset.sh`
+- (IN AWS Terminal) in project folder run `chmod +x setup_dataset.sh` then execute `./setup_dataset.sh`. `(Note: Join the kaggle competition before running)`
 -  Previous execution should take a lot of time to download and unzip the dataset from kaggle and unzip it, grab a coffee meanwhile.
+
+## PIP install issue in AWS
+- If you are not able to download external pip packages run this on AWS terminal `sudo rm /usr/lib/python3.12/EXTERNALLY-MANAGED`
+
+## Model Research:
+### Phase 1 (Deadline Tuesday-18th Apr)
+    - Train Faster RCNN and YOLO model.
+    - With Hyper parameters
+            - Epochs: 100
+            - Batch Size: 32
+            - Iput Image Size: (760x760x1)
+            - Random seed: 420
+    - Deliverables
+            - IoU
+            - map@.5, map@.7, map@.9
+            
+
