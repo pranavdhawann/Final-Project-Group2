@@ -32,6 +32,7 @@ It contains all source code related to the final group project.
             - Batch Size: 32
             - Iput Image Size: (760x760x1)
             - Random seed: 420
+            - Bounding box shape: (100px , 100px)
     - Deliverables
             - IoU
             - map@.5, map@.7, map@.9

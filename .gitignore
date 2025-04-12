@@ -7,4 +7,5 @@ misc.xml
 modules.xml
 profiles_settings.xml
 vcs.xml
-.DS_store
+.DS_Store
+viz_bboxes
