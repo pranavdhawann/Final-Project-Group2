@@ -29,8 +29,8 @@ It contains all source code related to the final group project.
     - Train Faster RCNN and YOLO model.
     - With Hyper parameters
             - Epochs: 100
-            - Batch Size: 32
-            - Iput Image Size: (760x760x1)
+            - Batch Size: 4
+            - Iput Image Size: (720x720x1)
             - Random seed: 420
             - Bounding box shape: (100px , 100px)
     - Deliverables
