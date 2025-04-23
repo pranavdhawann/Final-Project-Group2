@@ -26,7 +26,7 @@ It contains all source code related to the final group project.
 
 ## Model Research:
 ### Phase 1 (Deadline Tuesday-18th Apr)
-    - Train Faster RCNN and YOLO model.
+    - Train Faster CenterNet, RCNN and YOLO model.
     - With Hyper parameters
             - Epochs: 100
             - Batch Size: 32
