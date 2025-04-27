@@ -1,7 +1,7 @@
 import torch
 import torchvision.transforms as T
 import cv2
-from utilities import get_frcnn_annotations, save_image
+from utilities import get_frcnn_annotations, save_image, preprocessImg
 import numpy as np
 
 
@@ -18,6 +18,7 @@ class CustomDataset(torch.utils.data.Dataset):
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, self.img_resize_shape)
+        img = preprocessImg(img)
         img = img.astype(np.float32) / 255.0
         boxes = self.annotations[idx]["boxes"]
         labels = self.annotations[idx]["labels"]
