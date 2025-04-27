@@ -29,12 +29,21 @@ It contains all source code related to the final group project.
     - Train Faster CenterNet, RCNN and YOLO model.
     - With Hyper parameters
             - Epochs: 100
-            - Batch Size: 32
-            - Iput Image Size: (760x760x1)
+            - Batch Size: 4
+            - Iput Image Size: (720x720x1)
             - Random seed: 420
             - Bounding box shape: (100px , 100px)
     - Deliverables
             - IoU
             - map@.5, map@.7, map@.9
+
+## Results
+### FasterRCNN:
+#### 1. baseline:
+    - Epochs: 20
+    - Batch size: 4
+    - map: 0.4068 map50: 0.7924 map75: 0.4484
+
+
             
 

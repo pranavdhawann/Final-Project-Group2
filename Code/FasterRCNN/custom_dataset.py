@@ -3,9 +3,6 @@ import torchvision.transforms as T
 import cv2
 from utilities import get_frcnn_annotations, save_image
 
-transform = T.Compose([
-    T.ToTensor(),
-])
 
 class CustomDataset(torch.utils.data.Dataset):
     def __init__(self, transforms=None):
@@ -23,10 +20,13 @@ class CustomDataset(torch.utils.data.Dataset):
 
         boxes = self.annotations[idx]["boxes"]
         labels = self.annotations[idx]["labels"]
-
         target = {}
         target["boxes"] = torch.as_tensor(boxes, dtype=torch.float32)
         target["labels"] = torch.as_tensor(labels, dtype=torch.int64)
+
+        if target["boxes"].numel() == 0:
+            target["boxes"] = torch.empty((0, 4), dtype=torch.float32)
+            target["labels"] = torch.empty((0,), dtype=torch.int64)
 
         if self.transforms is not None:
             img = self.transforms(img)
@@ -36,6 +36,9 @@ class CustomDataset(torch.utils.data.Dataset):
 
 
 if __name__ == "__main__":
+    transform = T.Compose([
+        T.ToTensor(),
+    ])
 
     dataset = CustomDataset(transform)
     import random
