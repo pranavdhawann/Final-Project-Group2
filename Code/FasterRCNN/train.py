@@ -4,7 +4,8 @@ from torch.utils.data import DataLoader
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 import torchvision.transforms as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from utilities import validate, saveResultImages
+from utilities import validate, saveResultImages, save_metrics_plots
+from params import *
 import argparse
 import os
 
@@ -21,17 +22,15 @@ transforms = T.Compose([
     T.ToTensor(),
 ])
 
-dataset = CustomDataset(transforms=transforms)
-indices_random = torch.randperm(len(dataset)).tolist()
+train_dataset = CustomDataset(transforms=transforms)
+val_dataset = CustomDataset(split= "val",transforms=transforms)
 
-train_size = int(len(dataset) * 0.7)
-
-train_dataset = torch.utils.data.Subset(dataset, indices_random[:train_size])
-val_dataset = torch.utils.data.Subset(dataset, indices_random[train_size:])
+print("Len of train_dataset: ", len(train_dataset))
+print("Len of val_dataset: ", len(val_dataset))
 
 train_loader = DataLoader(
     train_dataset,
-    batch_size=10,
+    batch_size=BATCH_SIZE,
     shuffle=True,
     collate_fn= lambda batch: tuple(zip(*batch)),
     num_workers= 4,
@@ -40,7 +39,7 @@ train_loader = DataLoader(
 
 val_loader = DataLoader(
     val_dataset,
-    batch_size=10,
+    batch_size=1,
     shuffle= False,
     collate_fn= lambda batch: tuple(zip(*batch)),
     num_workers= 4,
@@ -56,7 +55,7 @@ model.to(device)
 trainable_params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.SGD(
     trainable_params,
-    lr= 0.005,
+    lr= LR,
     momentum=0.9,
     weight_decay=5e-4,
 )
@@ -67,7 +66,7 @@ lr_scheduler = torch.optim.lr_scheduler.StepLR(
     gamma=0.1
 )
 
-num_epochs = 20
+
 
 def train(run_name):
     patience = 5
@@ -75,7 +74,10 @@ def train(run_name):
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
-    for epoch in range(num_epochs):
+    precisions = []
+    recalls = []
+    f1s = []
+    for epoch in range(EPOCHS):
 
         model.train()
         train_loss= 0
@@ -112,7 +114,7 @@ def train(run_name):
         else:
             patience_counter +=1
 
-        if patience_counter == patience:
+        if patience_counter == PATIENCE:
             print("Early Stopping")
             break
         lr_scheduler.step()
@@ -121,12 +123,16 @@ def train(run_name):
         map_ = validate(model, val_loader, device)
 
         print(f'Epoch: {epoch+1}, train_loss: {train_loss/len(train_loader):.4f}, val_loss: {val_loss/len(val_loader):.4f}')
-        print(f"     map: {map_["map"]:.4f} map50: {map_['map_50']:.4f} map75: {map_['map_75']:.4f}")
-
+        print(f"     map: {map_["map"]:.4f} map50: {map_['map_50']:.4f} map75: {map_['map_75']:.4f} p: {map_['precision']:.4f} r: {map_['recall']:.4f} f1: {map_['f1']:.4f}")
+        precisions.append(map_['precision'])
+        recalls.append(map_['recall'])
+        f1s.append(map_['f1'])
     final_map = validate(model, val_loader, device)
-    print(f"     map: {final_map["map"]:.4f} map50: {final_map['map_50']:.4f} map75: {final_map['map_75']:.4f}")
+    print(f"     map: {final_map["map"]:.4f} map50: {final_map['map_50']:.4f} map75: {final_map['map_75']:.4f} p: {final_map['precision']:.4f} r: {final_map['recall']:.4f} f1: {final_map['f1']:.4f}")
+
     print('training done')
     saveResultImages(model, val_loader, device, output_dir=f'runs/{run_name}/val_outputs/')
+    save_metrics_plots(train_losses, val_losses, precisions, recalls, f1s, f'runs/{run_name}/plots/' )
 
 
 if __name__ == '__main__':

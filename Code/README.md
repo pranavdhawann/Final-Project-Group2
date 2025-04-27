@@ -42,8 +42,4 @@ It contains all source code related to the final group project.
 #### 1. baseline:
     - Epochs: 20
     - Batch size: 4
-    - map: 0.4068 map50: 0.7924 map75: 0.4484
-
-
-            
-
+    - map: 0.5284 map50: 0.8322 map75: 0.6948 p: 0.4150 r: 0.5676 f1: 0.4582

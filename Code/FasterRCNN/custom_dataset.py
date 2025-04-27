@@ -2,22 +2,23 @@ import torch
 import torchvision.transforms as T
 import cv2
 from utilities import get_frcnn_annotations, save_image
+import numpy as np
 
 
 class CustomDataset(torch.utils.data.Dataset):
-    def __init__(self, transforms=None):
+    def __init__(self, split="train", transforms=None):
         self.transforms = transforms
         self.data_path = "/home/ubuntu/Final-Project-Group2/Dataset/"
         self.img_resize_shape = (720, 720)
-        self.annotations = get_frcnn_annotations(self.data_path+"train_labels.csv", self.img_resize_shape)
-
+        self.annotations = get_frcnn_annotations(self.data_path+"train_labels_split.csv", self.img_resize_shape)
+        self.annotations = [x for x in self.annotations if x["split"] == split]
     def __getitem__(self, idx):
 
         img_path = self.data_path + "train/"+self.annotations[idx]["file_name"]
         img = cv2.imread(img_path)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, self.img_resize_shape)
-
+        img = img.astype(np.float32) / 255.0
         boxes = self.annotations[idx]["boxes"]
         labels = self.annotations[idx]["labels"]
         target = {}
