@@ -36,5 +36,14 @@ It contains all source code related to the final group project.
     - Deliverables
             - IoU
             - map@.5, map@.7, map@.9
+
+## Results
+### FasterRCNN:
+#### 1. baseline:
+    - Epochs: 20
+    - Batch size: 4
+    - map: 0.4068 map50: 0.7924 map75: 0.4484
+
+
             
 
