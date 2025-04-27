@@ -59,12 +59,12 @@ optimizer = torch.optim.SGD(
     momentum=0.9,
     weight_decay=5e-4,
 )
-
-lr_scheduler = torch.optim.lr_scheduler.StepLR(
-    optimizer,
-    step_size=3,
-    gamma=0.1
-)
+#
+# lr_scheduler = torch.optim.lr_scheduler.StepLR(
+#     optimizer,
+#     step_size=3,
+#     gamma=0.1
+# )
 
 
 
@@ -117,7 +117,7 @@ def train(run_name):
         if patience_counter == PATIENCE:
             print("Early Stopping")
             break
-        lr_scheduler.step()
+        # lr_scheduler.step()
         train_losses.append(train_loss/len(train_loader))
         val_losses.append(val_loss/len(val_loader))
         map_ = validate(model, val_loader, device)

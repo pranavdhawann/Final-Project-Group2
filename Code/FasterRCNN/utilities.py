@@ -265,3 +265,24 @@ def save_metrics_plots(train_losses, val_losses, precisions, recalls, f1s, outpu
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'metrics.png'), dpi=300, bbox_inches='tight')
     plt.close()
+
+
+import cv2
+def preprocessImg(img):
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img.copy()
+    denoised = cv2.medianBlur(gray, ksize=3)
+    clahe = cv2.createCLAHE(
+        clipLimit=2.0,
+        tileGridSize=(8, 8)
+    )
+    denoised = clahe.apply(denoised)
+    denoised = cv2.fastNlMeansDenoising(
+            denoised,
+            h=15,
+            templateWindowSize=7,
+            searchWindowSize=21
+    )
+    return denoised

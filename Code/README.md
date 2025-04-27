@@ -43,3 +43,27 @@ It contains all source code related to the final group project.
     - Epochs: 20
     - Batch size: 4
     - map: 0.5284 map50: 0.8322 map75: 0.6948 p: 0.4150 r: 0.5676 f1: 0.4582
+### 2. Image Ehnancement
+```
+def preprocessImg(img):
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    else:
+        gray = img.copy()
+    denoised = cv2.medianBlur(gray, ksize=3)
+    clahe = cv2.createCLAHE(
+        clipLimit=2.0,
+        tileGridSize=(8, 8)
+    )
+    denoised = clahe.apply(denoised)
+    denoised = cv2.fastNlMeansDenoising(
+            denoised,
+            h=15,
+            templateWindowSize=7,
+            searchWindowSize=21
+    )
+    return denoised
+```
+    - Epochs: 7 
+    - Batch Size: 4
+    - map: 0.5445 map50: 0.8309 map75: 0.7512 p: 0.5158 r: 0.5676 f1: 0.5315 
