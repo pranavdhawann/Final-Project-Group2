@@ -10,3 +10,4 @@ vcs.xml
 .DS_Store
 viz_bboxes
 runs
+*.pyc
