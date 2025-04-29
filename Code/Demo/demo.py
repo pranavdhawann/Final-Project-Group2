@@ -188,8 +188,8 @@ def main():
         # Define transforms
         transform = T.Compose([
             T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225])
+            # T.Normalize(mean=[0.485, 0.456, 0.406],
+            #             std=[0.229, 0.224, 0.225])
         ])
 
         for f in files:
@@ -200,10 +200,8 @@ def main():
 
             # Apply transforms
             img_tensor = transform(img_np).unsqueeze(0).to(device)
-            print(img_tensor.shape)
             # Run inference
             with torch.no_grad():
-                print(model(img_tensor))
                 predictions = model(img_tensor)[0]
 
             # Process detections
