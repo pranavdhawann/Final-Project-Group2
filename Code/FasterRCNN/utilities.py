@@ -7,41 +7,101 @@ import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 
-def get_frcnn_annotations(train_labels_path ,resize_shape):
+# def get_frcnn_annotations(train_labels_path ,resize_shape):
+#
+#     bb_w, bb_h = 100,100
+#
+#     df = pd.read_csv(train_labels_path)
+#     grouped_list = [group for _, group in df.groupby(["tomo_id", "Motor axis 0"])]
+#     annotations = []     # {"filename", "boxes", labels}
+#
+#     for group in grouped_list:
+#         file_name = group.iloc[0]["tomo_id"]+"/slice_"+str(int(group.iloc[0]["Motor axis 0"])).zfill(4)+".jpg" \
+#             if group.iloc[0]["Number of motors"] != 0 \
+#             else group.iloc[0]["tomo_id"]+"/slice_"+str(int(group.iloc[0]["Array shape (axis 0)"]/2)).zfill(4)+".jpg"
+#         boxes = []
+#         labels = []
+#         if group.iloc[0]["Number of motors"] != 0:
+#             for _, row in group.iterrows():
+#                 cy = row["Motor axis 1"]
+#                 cx = row["Motor axis 2"]
+#
+#                 x0,y0 = max(0, cx-bb_w/2.0), max(0, cy-bb_h/2.0)
+#                 x1,y1 = min(row["Array shape (axis 2)"], cx+bb_w/2.0), min(row["Array shape (axis 1)"], cy+bb_h/2.0)
+#
+#                 # x0,x1 = int((x0/row["Array shape (axis 2)"])*resize_shape[0]), int((x1/row["Array shape (axis 2)"])*resize_shape[0])
+#                 # y0,y1 = int((y0/row["Array shape (axis 1)"])*resize_shape[1]), int((y1/row["Array shape (axis 1)"])*resize_shape[1])
+#                 x0, x1 = (x0 / row["Array shape (axis 2)"]) * resize_shape[0], (x1 / row["Array shape (axis 2)"]) * resize_shape[0]
+#                 y0, y1 = (y0 / row["Array shape (axis 1)"]) * resize_shape[1],(y1 / row["Array shape (axis 1)"]) * resize_shape[1]
+#
+#                 boxes.append([x0,y0,x1,y1])
+#                 labels.append(1)
+#         annotations.append(
+#             {
+#                 "file_name": file_name,
+#                 "boxes": boxes,
+#                 "labels": labels,
+#                 "split": group.iloc[0]["split"]
+#             }
+#         )
+#     return annotations
 
-    bb_w, bb_h = 100,100
+def get_frcnn_annotations(train_labels_path, resize_shape):
+    bb_w, bb_h = 100, 100  # Fixed bounding box dimensions
 
     df = pd.read_csv(train_labels_path)
     grouped_list = [group for _, group in df.groupby(["tomo_id", "Motor axis 0"])]
-    annotations = []     # {"filename", "boxes", labels}
+    annotations = []
 
     for group in grouped_list:
-        file_name = group.iloc[0]["tomo_id"]+"/slice_"+str(int(group.iloc[0]["Motor axis 0"])).zfill(4)+".jpg" \
-            if group.iloc[0]["Number of motors"] != 0 \
-            else group.iloc[0]["tomo_id"]+"/slice_"+str(int(group.iloc[0]["Array shape (axis 0)"]/2)).zfill(4)+".jpg"
+        # File name construction
+        if group.iloc[0]["Number of motors"] != 0:
+            slice_num = int(group.iloc[0]["Motor axis 0"])
+        else:
+            slice_num = int(group.iloc[0]["Array shape (axis 0)"] / 2)
+
+        file_name = f"{group.iloc[0]['tomo_id']}/slice_{str(slice_num).zfill(4)}.jpg"
+
         boxes = []
         labels = []
+
         if group.iloc[0]["Number of motors"] != 0:
             for _, row in group.iterrows():
+                # Original image dimensions
+                orig_h = row["Array shape (axis 1)"]
+                orig_w = row["Array shape (axis 2)"]
+
+                # Center coordinates
                 cy = row["Motor axis 1"]
                 cx = row["Motor axis 2"]
 
-                x0,y0 = max(0, cx-bb_w/2), max(0, cy-bb_h/2)
-                x1,y1 = min(row["Array shape (axis 2)"], cx+bb_w/2), min(row["Array shape (axis 1)"], cy+bb_h/2)
+                # Calculate original bounding box coordinates
+                x0 = max(0, cx - bb_w / 2.0)
+                y0 = max(0, cy - bb_h / 2.0)
+                x1 = min(orig_w, cx + bb_w / 2.0)
+                y1 = min(orig_h, cy + bb_h / 2.0)
 
-                x0,x1 = int((x0/row["Array shape (axis 2)"])*resize_shape[0]), int((x1/row["Array shape (axis 2)"])*resize_shape[0])
-                y0,y1 = int((y0/row["Array shape (axis 1)"])*resize_shape[1]), int((y1/row["Array shape (axis 1)"])*resize_shape[1])
+                # Skip invalid boxes
+                if x0 >= x1 or y0 >= y1:
+                    continue
 
-                boxes.append([x0,y0,x1,y1])
-                labels.append(1)
-        annotations.append(
-            {
-                "file_name": file_name,
-                "boxes": boxes,
-                "labels": labels,
-                "split": group.iloc[0]["split"]
-            }
-        )
+                # Scale to target size
+                x0 = (x0 / orig_w) * resize_shape[0]
+                y0 = (y0 / orig_h) * resize_shape[1]
+                x1 = (x1 / orig_w) * resize_shape[0]
+                y1 = (y1 / orig_h) * resize_shape[1]
+
+                boxes.append([x0, y0, x1, y1])
+                labels.append(1)  # Assuming class 1 for all objects
+
+        annotations.append({
+            "file_name": file_name,
+            "boxes": boxes,
+            "labels": labels,
+            "split": group.iloc[0]["split"],
+            # "original_size": (orig_h, orig_w)  # Store original dimensions for reference
+        })
+
     return annotations
 
 def save_image(img, target, save_path):
@@ -52,7 +112,14 @@ def save_image(img, target, save_path):
     else:
         raise TypeError("Image must be a PyTorch tensor")
 
-    ax.imshow(img_np)
+    # Convert to grayscale if it has multiple channels
+    if img_np.shape[-1] > 1:
+        # Simple average across color channels (or you can use luminosity formula)
+        img_gray = img_np.mean(axis=-1)
+    else:
+        img_gray = img_np.squeeze()
+
+    ax.imshow(img_gray, cmap="gray")  # Force grayscale colormap
 
     for box in target["boxes"]:
         xmin, ymin, xmax, ymax = box.tolist()
@@ -178,6 +245,10 @@ def saveResultImages(model, val_loader, device, output_dir='validation_results',
                     image_to_show = image.cpu().permute(1, 2, 0).numpy()
                     if image_to_show.max() <= 1.0:  # if normalized
                         image_to_show = (image_to_show * 255).astype(np.uint8)
+                if image_to_show.shape[-1] > 1:
+                    image_to_show = image_to_show.mean(axis=-1)
+                else:
+                    image_to_show = image_to_show.squeeze()
                 ax = axs[image_counter % images_per_composite]
                 ax.imshow(image_to_show)
                 for box, label in zip(target['boxes'].cpu().numpy(), target['labels'].cpu().numpy()):
