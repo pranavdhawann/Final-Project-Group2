@@ -1,4 +1,5 @@
 import torch
+from scipy.stats.tests.test_continuous_fit_censored import optimizer
 from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
@@ -12,18 +13,54 @@ import os
 
 from custom_dataset import CustomDataset
 
-model = fasterrcnn_resnet50_fpn(weights=True)
+model = fasterrcnn_resnet50_fpn(
+    pretrained=True,
+    box_score_thresh=0.2,
+    box_nms_thresh=0.3,
+    rpn_pre_nms_top_n_train=1000,
+    rpn_post_nms_top_n_train=500,
+)
 
 num_classes = 2
 in_features = model.roi_heads.box_predictor.cls_score.in_features
 model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
-transforms = T.Compose([
+train_transforms = T.Compose([
     T.ToTensor(),
 ])
 
-train_dataset = CustomDataset(transforms=transforms)
-val_dataset = CustomDataset(split= "val",transforms=transforms)
+val_transforms = T.Compose([
+    T.ToTensor(),
+])
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
+
+get_train_transform= A.Compose([
+    A.HorizontalFlip(p=0.3),  # Reduced from 0.5
+    A.VerticalFlip(p=0.3),
+    A.RandomBrightnessContrast(p=0.3),
+    A.GaussNoise(p=0.1),  # Add noise
+    A.CoarseDropout(max_holes=8, max_height=32, max_width=32, p=0.3),  # New
+    A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ToTensorV2()
+    ], bbox_params=A.BboxParams(
+        format='pascal_voc',
+        label_fields=['labels']
+    ))
+
+get_val_transform= A.Compose([
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ToTensorV2()
+    ], bbox_params=A.BboxParams(
+        format='pascal_voc',
+        label_fields=['labels']
+    ))
+
+
+train_dataset = CustomDataset(transforms=get_train_transform)
+val_dataset = CustomDataset(split= "val",transforms=get_val_transform)
 
 print("Len of train_dataset: ", len(train_dataset))
 print("Len of val_dataset: ", len(val_dataset))
@@ -54,24 +91,21 @@ model.to(device)
 
 trainable_params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.SGD(
-    trainable_params,
-    lr= LR,
+    model.parameters(),
+    lr=LR,
     momentum=0.9,
-    weight_decay=5e-4,
+    weight_decay=0.0001
 )
-#
-# lr_scheduler = torch.optim.lr_scheduler.StepLR(
-#     optimizer,
-#     step_size=3,
-#     gamma=0.1
-# )
 
-
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer,
+    T_max=EPOCHS,
+    eta_min=1e-5  # Lower minimum learning rate
+)
 
 def train(run_name):
-    patience = 5
     patience_counter = 0
-    best_val_loss = float('inf')
+    best_map50 = -1
     train_losses = []
     val_losses = []
     precisions = []
@@ -106,18 +140,8 @@ def train(run_name):
                 val_loss += loss.item()
 
         avg_val_loss = val_loss / len(val_loader)
-        if avg_val_loss < best_val_loss:
-            patience_counter = 0
-            best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), f"runs/{run_name}/best_models/best_model.pth")
-            print("Model Saved")
-        else:
-            patience_counter +=1
-
-        if patience_counter == PATIENCE:
-            print("Early Stopping")
-            break
         # lr_scheduler.step()
+        scheduler.step()
         train_losses.append(train_loss/len(train_loader))
         val_losses.append(val_loss/len(val_loader))
         map_ = validate(model, val_loader, device)
@@ -127,6 +151,17 @@ def train(run_name):
         precisions.append(map_['precision'])
         recalls.append(map_['recall'])
         f1s.append(map_['f1'])
+        if map_['map_50'] > best_map50:
+            patience_counter = 0
+            best_map50 = map_['map_50']
+            torch.save(model.state_dict(), f"runs/{run_name}/best_models/best_model.pth")
+            print("Model Saved")
+        else:
+            patience_counter +=1
+
+        if patience_counter == PATIENCE:
+            print("Early Stopping")
+            break
     final_map = validate(model, val_loader, device)
     print(f"     map: {final_map["map"]:.4f} map50: {final_map['map_50']:.4f} map75: {final_map['map_75']:.4f} p: {final_map['precision']:.4f} r: {final_map['recall']:.4f} f1: {final_map['f1']:.4f}")
 
