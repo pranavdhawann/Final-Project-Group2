@@ -73,6 +73,23 @@ def display_columns(orig, proc, orig_cap, proc_cap):
     c1.image(orig, caption=orig_cap, use_container_width=True)
     c2.image(proc, caption=proc_cap, use_container_width=True)
 
+
+def create_tensor(img_bgr, device=None):
+    """Convert BGR image to normalized tensor"""
+    # Convert to RGB and normalize
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    img_tensor = torch.from_numpy(img_rgb).float() / 255.0
+    img_tensor = img_tensor.permute(2, 0, 1)  # HWC to CHW
+
+    # Normalize with ImageNet stats
+    normalize = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    img_tensor = normalize(img_tensor)
+
+    # Move to device if specified
+    if device:
+        img_tensor = img_tensor.to(device)
+    return img_tensor.unsqueeze(0)  # Add batch dimension
+
 # ---- MAIN APP ----
 def main():
     st.markdown("""
@@ -133,7 +150,85 @@ def main():
                 if detections:
                     df = pd.DataFrame(detections)
                     st.dataframe(df.style.highlight_max(axis=0, color='#d8f3dc'))
+    elif model_name == "Faster R-CNN":
+        from torchvision.models.detection import fasterrcnn_resnet50_fpn
+        import torchvision.transforms as T
+        from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+        # Load the model first
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+        # Initialize the model architecture
+        model = fasterrcnn_resnet50_fpn(
+            pretrained=False,  # We're loading our own weights
+            box_score_thresh=0.2,
+            box_nms_thresh=0.3,
+            rpn_pre_nms_top_n_train=1000,
+            rpn_post_nms_top_n_train=500,
+        )
+
+        # Modify for your custom classes
+        num_classes = 2  # Update this with your actual number of classes
+        in_features = model.roi_heads.box_predictor.cls_score.in_features
+        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+        # Load the trained weights
+        model.load_state_dict(torch.load('./models/FasterRCNN/best_model.pth', map_location=device))
+        model.to(device)
+        model.eval()
+
+        # File uploader
+        files = st.file_uploader("Drag & Drop Tomogram Image(s)",
+                                 type=["jpg", "jpeg", "png", "tiff"],
+                                 accept_multiple_files=True)
+        if not files:
+            st.stop()
+
+        st.subheader("Faster R-CNN Detection Results")
+
+        # Define transforms
+        transform = T.Compose([
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225])
+        ])
+
+        for f in files:
+            # Load and preprocess image
+            img = Image.open(f).convert('RGB')
+            img_resized = img.resize((900, 900))
+            img_np = np.array(img_resized)
+
+            # Apply transforms
+            img_tensor = transform(img_np).unsqueeze(0).to(device)
+            print(img_tensor.shape)
+            # Run inference
+            with torch.no_grad():
+                print(model(img_tensor))
+                predictions = model(img_tensor)[0]
+
+            # Process detections
+            detections = []
+            for box, score, label in zip(predictions['boxes'], predictions['scores'], predictions['labels']):
+                if score >= confidence:  # Apply confidence threshold
+                    x1, y1, x2, y2 = map(int, box.cpu().numpy())
+                    detections.append({
+                        "xmin": x1,
+                        "ymin": y1,
+                        "xmax": x2,
+                        "ymax": y2,
+                        "confidence": float(score),
+                        "class": label.item()
+                    })
+
+            # Visualize results
+            proc_img = annotate(img_np, detections)
+            display_columns(img_resized, proc_img, f"Original: {f.name}", "Detected")
+
+            with st.expander("Detection Details"):
+                st.write(f"Total detections: {len(detections)}")
+                if detections:
+                    df = pd.DataFrame(detections)
+                    st.dataframe(df.style.highlight_max(axis=0, color='#d8f3dc'))
     else:  
         f = st.file_uploader("Drag & Drop Tomogram Image", type=["jpg","jpeg","png","tiff"])
         if not f:
