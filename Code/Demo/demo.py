@@ -1,235 +1,177 @@
 import os
-import sys
 import warnings
-warnings.filterwarnings("ignore")
-
-import streamlit as st
 import numpy as np
 import pandas as pd
 import torch
 import torchvision
-from PIL import Image
 import cv2
+from PIL import Image
 from ultralytics import YOLO
+import streamlit as st
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, parent_dir)
-
-# Custom CSS for styling
-st.markdown("""
-<style>
-    .header {
-        font-size: 36px !important;
-        color: #2E86C1;
-        text-align: center;
-        padding: 20px;
-    }
-    .subheader {
-        font-size: 20px !important;
-        color: #5D6D7E;
-        text-align: center;
-        margin-bottom: 30px;
-    }
-    .upload-box {
-        border: 2px dashed #5D6D7E;
-        border-radius: 5px;
-        padding: 30px;
-        text-align: center;
-        margin: 20px 0;
-    }
-    .stSlider > div > div > div {
-        background: #2E86C1 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
+# ---- CONSTANTS ----
+MAX_DETECTIONS_PER_TOMO = 3
+NMS_IOU_THRESHOLD = 0.2
 MODEL_PATHS = {
-    "YOLOv8": "models/YOLO/best.pt",
+    "YOLOv10": "models/YOLO/best.pt",  
     "CenterNet": "models/CenterNet/centernet_final.pth",
     "Faster R-CNN": "models/FasterRCNN/best_model.pth"
 }
 
-@st.cache_resource
+warnings.filterwarnings("ignore")
+
+# ---- UTILS ----
+def normalize_slice(slice_data):
+    p2, p98 = np.percentile(slice_data, [2, 98])
+    clipped = np.clip(slice_data, p2, p98)
+    return np.uint8(255 * (clipped - p2) / (p98 - p2 + 1e-7))
+
+def preload_image_batch(file_paths):
+    return [cv2.imread(p) if cv2.imread(p) is not None else np.array(Image.open(p)) for p in file_paths]
+
+def create_tensor(img_array, device):
+    tensor = torch.from_numpy(img_array).permute(2, 0, 1).float() / 255.0
+    return tensor.to(device).unsqueeze(0)
+
 def load_model(model_name):
-    model_path = MODEL_PATHS[model_name]
-    if not os.path.exists(model_path):
-        st.error(f"Model file not found: {model_path}")
+    path = MODEL_PATHS.get(model_name)
+    if not path or not os.path.exists(path):
+        st.error(f"Model file not found: {path}")
         st.stop()
-
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    try:
-        if model_name == "YOLOv8":
-            model = YOLO(model_path)
-            model.to(device)
-        elif model_name == "CenterNet":
-            from CenterNet.CenterNet_Model import CenterNet
-            model = CenterNet(num_classes=1)
-            model.load_state_dict(torch.load(model_path, map_location=device))
-            model.to(device)
-        else:  # Faster R-CNN
-            model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
-            in_features = model.roi_heads.box_predictor.cls_score.in_features
-            model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 2)
-            model.load_state_dict(torch.load(model_path, map_location=device))
-            model.to(device)
-        
-        model.eval()
-        return model
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        st.stop()
 
-def decode_centernet_output(heatmap, size, offset, confidence_threshold, down_ratio=4):
-    """Decode CenterNet outputs to bounding boxes"""
-    # Get peak locations
-    heatmap = heatmap.squeeze()
-    peaks = np.where(heatmap >= confidence_threshold)
-    
-    detections = []
-    for y, x in zip(peaks[0], peaks[1]):
-        # Get raw predictions
-        dx = offset[0, y, x].item()
-        dy = offset[1, y, x].item()
-        w = size[0, y, x].item()
-        h = size[1, y, x].item()
-        
-        # Convert to original image coordinates
-        x_center = (x + dx) * down_ratio
-        y_center = (y + dy) * down_ratio
-        width = w * down_ratio
-        height = h * down_ratio
-        
-        detections.append({
-            'xmin': x_center - width/2,
-            'ymin': y_center - height/2,
-            'xmax': x_center + width/2,
-            'ymax': y_center + height/2,
-            'confidence': heatmap[y, x],
-            'class': 0,
-            'name': 'flagellar_motor'
-        })
-    
-    return pd.DataFrame(detections)
+    if model_name == "YOLOv10": 
+        model = YOLO(path).to(device)
+        model.fuse()
+        return model.eval()
 
+    if model_name == "CenterNet":
+        from CenterNet.CenterNet_Model import CenterNet, decode_centernet_output
+        model = CenterNet(num_classes=1)
+        state = torch.load(path, map_location=device)
+        model.load_state_dict(state)
+        return (model.to(device).eval(), decode_centernet_output)
+
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=None)
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 2)
+    state = torch.load(path, map_location=device)
+    model.load_state_dict(state)
+    return model.to(device).eval()
+
+def annotate(image, detections, color=(0,255,0), thickness=2):
+    out = image.copy()
+    for det in detections:
+        x1, y1 = int(det['xmin']), int(det['ymin'])
+        x2, y2 = int(det['xmax']), int(det['ymax'])
+        cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
+    return out
+
+def display_columns(orig, proc, orig_cap, proc_cap):
+    c1, c2 = st.columns(2)
+    c1.image(orig, caption=orig_cap, use_container_width=True)
+    c2.image(proc, caption=proc_cap, use_container_width=True)
+
+# ---- MAIN APP ----
 def main():
-    st.markdown('<p class="header">🦠 Bacterial Flagellar Motor Detection</p>', unsafe_allow_html=True)
-    st.markdown('<p class="subheader">Automated detection of flagellar motors in cryo-electron tomograms</p>', unsafe_allow_html=True)
+    st.markdown("""
+        <h1 style='text-align:center; color:#2E86C1;'>🦠 Bacterial Flagellar Motor Detection</h1>
+        <p style='text-align:center; color:#5D6D7E;'>Automated detection on your tomogram images</p>
+    """, unsafe_allow_html=True)
 
-    # Sidebar controls
     with st.sidebar:
         st.header("Settings")
-        model_name = st.selectbox(
-            "Select Detection Model",
-            tuple(MODEL_PATHS.keys())
-        )
-        confidence_threshold = st.slider(
-            "Confidence Threshold", 
-            min_value=0.0, max_value=1.0, value=0.5, step=0.01
-        )
+        model_name = st.selectbox("Select Model", list(MODEL_PATHS))
+        confidence = st.slider("Confidence Threshold", 0.0, 1.0, 0.0, 0.01) 
 
-    # File upload section
-    st.markdown('<p class="subheader">Drag and drop your tomogram image below</p>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader(
-        " ",
-        type=["jpg", "jpeg", "png", "tiff"],
-        label_visibility="collapsed"
-    )
+    model_info = load_model(model_name)
+    if model_name == "CenterNet":
+        model, decode_centernet_output = model_info
+    else:
+        model = model_info
 
-    if uploaded_file is not None:
-        # Load as grayscale
-        image = Image.open(uploaded_file).convert('L')
-        img_array = np.array(image)
+    if model_name == "YOLOv10":  
+        files = st.file_uploader("Drag & Drop Tomogram Image(s)",
+                               type=["jpg","jpeg","png","tiff"],
+                               accept_multiple_files=True)
+        if not files:
+            st.stop()
 
-        # Display original image
-        col1, col2 = st.columns(2)
-        with col1:
-            st.image(image, caption="Original Tomogram", use_container_width=True, clamp=True)
+        st.subheader("YOLOv10 Detection Results")
+        for f in files:
+            img = Image.open(f).convert('RGB')
+            img_resized = img.resize((960, 960))  
+            img_np = np.array(img_resized)
 
-        # Convert grayscale to 3-channel for models
-        yolo_input = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-        other_input = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+            results = model(img_np, 
+                           conf=confidence,
+                           iou=NMS_IOU_THRESHOLD,
+                           imgsz=960,
+                           verbose=False)
 
-        # Detection processing
-        with st.spinner(f'🔍 Running {model_name} detection...'):
-            try:
-                model = load_model(model_name)
-                device = next(model.parameters()).device  # Get device from model
-                
-                if model_name == "YOLOv8":
-                    results = model(yolo_input, conf=confidence_threshold)
-                    detections = results[0].boxes.data.cpu().numpy()
-                    columns = ['xmin', 'ymin', 'xmax', 'ymax', 'confidence', 'class']
-                    detections = pd.DataFrame(detections, columns=columns)
-                    detections['class'] = detections['class'].astype(int)
-                    detections['name'] = detections['class'].apply(lambda x: model.names[x])
-                    detected_img = results[0].plot()[:, :, ::-1]
-                elif model_name == "CenterNet":
-                    # Prepare input tensor
-                    input_tensor = torch.from_numpy(other_input).permute(2, 0, 1).float()
-                    input_tensor = input_tensor.to(device).unsqueeze(0) / 255.0
-                    
-                    # Forward pass
-                    with torch.no_grad():
-                        outputs = model(input_tensor)
-                    
-                    # Convert outputs to numpy
-                    heatmap = outputs['heatmap'].cpu().numpy()[0]
-                    size = outputs['size'].cpu().numpy()[0]
-                    offset = outputs['offset'].cpu().numpy()[0]
-                    
-                    # Decode predictions
-                    detections = decode_centernet_output(heatmap, size, offset, confidence_threshold)
-                    
-                    # Draw bounding boxes
-                    detected_img = other_input.copy()
-                    for _, det in detections.iterrows():
-                        x1, y1, x2, y2 = map(int, [det['xmin'], det['ymin'], det['xmax'], det['ymax']])
-                        cv2.rectangle(detected_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        label = f"{det['name']} {det['confidence']:.2f}"
-                        cv2.putText(detected_img, label, (x1, y1-10),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
-                else:  # Faster R-CNN
-                    with torch.no_grad():
-                        input_tensor = torch.from_numpy(other_input).permute(2, 0, 1).float()
-                        input_tensor = input_tensor.to(device).unsqueeze(0) / 255.0
-                        outputs = model(input_tensor)[0]
-                    
-                    detections = []
-                    for box, score, label in zip(outputs['boxes'], outputs['scores'], outputs['labels']):
-                        if score >= confidence_threshold:
-                            detections.append({
-                                'xmin': box[0].item(),
-                                'ymin': box[1].item(),
-                                'xmax': box[2].item(),
-                                'ymax': box[3].item(),
-                                'confidence': score.item(),
-                                'class': label.item(),
-                                'name': 'flagellar_motor'
-                            })
-                    detections = pd.DataFrame(detections)
-                    
-                    # Draw bounding boxes
-                    detected_img = other_input.copy()
-                    for _, det in detections.iterrows():
-                        x1, y1, x2, y2 = map(int, [det['xmin'], det['ymin'], det['xmax'], det['ymax']])
-                        cv2.rectangle(detected_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        label = f"{det['name']} {det['confidence']:.2f}"
-                        cv2.putText(detected_img, label, (x1, y1-10),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+            detections = []
+            if results:
+                result = results[0]
+                boxes = result.boxes.cpu().numpy()
+                for box in boxes:
+                    if box.conf >= confidence:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        detections.append({
+                            "xmin": x1,
+                            "ymin": y1,
+                            "xmax": x2,
+                            "ymax": y2,
+                            "confidence": float(box.conf)
+                        })
 
-                with col2:
-                    st.image(detected_img, caption="Detection Results", use_container_width=True)
+            proc_img = annotate(img_np, detections)
+            display_columns(img_resized, proc_img, f"Original: {f.name}", "Detected")
 
-                st.subheader("📊 Detection Statistics")
+            with st.expander("Detection Details"):
                 st.write(f"Total detections: {len(detections)}")
-                if not detections.empty:
-                    st.dataframe(detections.style.highlight_max(axis=0, color='#EBF5FB'))
-                else:
-                    st.warning("No detections meeting confidence threshold")
+                if detections:
+                    df = pd.DataFrame(detections)
+                    st.dataframe(df.style.highlight_max(axis=0, color='#d8f3dc'))
 
-            except Exception as e:
-                st.error(f"Error during detection: {e}")
+    else:  
+        f = st.file_uploader("Drag & Drop Tomogram Image", type=["jpg","jpeg","png","tiff"])
+        if not f:
+            st.stop()
+
+        img_gray = Image.open(f).convert('L')
+        arr = np.array(img_gray)
+        img_bgr = cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
+
+        with st.spinner(f'Running {model_name} detection...'):
+            tensor = create_tensor(img_bgr, model.device)
+            if model_name == "CenterNet":
+                out = model(tensor)
+                raw = decode_centernet_output(
+                    out['heatmap'][0].cpu().numpy(),
+                    out['size'][0].cpu().numpy(),
+                    out['offset'][0].cpu().numpy(),
+                    confidence
+                )
+                detections = [{'xmin':x1,'ymin':y1,'xmax':x2,'ymax':y2}
+                            for x1,y1,x2,y2,conf in raw]
+            else:
+                outs = model(tensor)[0]
+                detections = []
+                for box, score in zip(outs['boxes'], outs['scores']):
+                    if score >= confidence:
+                        x1,y1,x2,y2 = box.cpu().numpy().astype(int)
+                        detections.append({'xmin': x1,'ymin': y1,'xmax': x2,'ymax': y2})
+
+            proc_img = annotate(img_bgr, detections)
+            display_columns(img_gray, proc_img, "Original", "Processed")
+
+        st.subheader("📊 Detection Statistics")
+        if detections:
+            df = pd.DataFrame(detections)
+            st.write(df, unsafe_allow_html=True)
+        else:
+            st.warning("No detections")
 
 if __name__ == "__main__":
     main()

@@ -4,18 +4,18 @@ This document describes the contents of the baseline directory for our YOLOv8 pr
 
 ## 1. Scripts
 
-1. **`train-yolo.py`**  
+1. **`yolov8-train-baseline.py`**  
    - Purpose: Train the YOLOv8 model on the motor‐detection dataset  
    - Usage example:  
      ```bash
-     python train-yolo.py 
+     python yolov8-train-baseline.py 
      ```
 
-2. **`test-yolo.py`**  
+2. **`yolov8-test-baseline.py`**  
    - Purpose: Run inference (testing) with a trained YOLOv8 model  
    - Usage example:  
      ```bash
-     python test-yolo.py 
+     python yolov8-test-baseline.py 
      ```
 
 ## 2. Results Directory
