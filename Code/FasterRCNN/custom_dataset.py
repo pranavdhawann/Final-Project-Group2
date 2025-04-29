@@ -87,7 +87,7 @@ class CustomDataset(torch.utils.data.Dataset):
             "boxes": boxes,
             "labels": labels
         }
-        img = img.float() / 255.0
+        # img = img.float() / 255.0
         return img, target
 
     def __len__(self):
