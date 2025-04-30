@@ -10,3 +10,7 @@ vcs.xml
 .DS_Store
 viz_bboxes
 runs
+!saliency_examples/saliency_6.png
+!saliency_examples/saliency_10.png
+!saliency_examples/saliency_4.png
+

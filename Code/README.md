@@ -72,3 +72,9 @@ def preprocessImg(img):
     - Epoch: 17
     - Batch Size: 10
     - map: 0.2674 map50: 0.7153 map75: 0.1505 p: 0.3420 r: 0.7368 f1: 0.4527
+
+### 4. Data Augmentation + Image Pre-Processing
+    - Epoch: 32
+    - Batch Size: 10
+    - LR: 0.001
+    - map: 0.3134 map50: 0.7653 map75: 0.2679 p: 0.4737 r: 0.7632 f1: 0.5610
