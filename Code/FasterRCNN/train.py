@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
 import torchvision.transforms as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 from utilities import validate, saveResultImages, save_metrics_plots
 from params import *
 import argparse
@@ -33,16 +35,19 @@ val_transforms = T.Compose([
     T.ToTensor(),
 ])
 
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-
-
 get_train_transform= A.Compose([
     A.HorizontalFlip(p=0.3),  # Reduced from 0.5
     A.VerticalFlip(p=0.3),
     A.RandomBrightnessContrast(p=0.3),
     A.GaussNoise(p=0.1),  # Add noise
-    A.CoarseDropout(max_holes=8, max_height=32, max_width=32, p=0.3),  # New
+    A.CoarseDropout(max_holes=8, max_height=32, max_width=32, p=0.3),
+    A.Affine(
+            scale=(0.9, 1.1),
+            translate_percent=0.05,
+            rotate=(-40, 40),
+            shear=(-2, 2),
+            p=0.3
+    ),
     A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ToTensorV2()
     ], bbox_params=A.BboxParams(
