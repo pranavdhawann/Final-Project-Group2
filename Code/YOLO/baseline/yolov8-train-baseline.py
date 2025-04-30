@@ -16,9 +16,9 @@ random.seed(42)
 torch.manual_seed(42)
 
 # Configuration
-TRUST = 4          # Number of slices around motor
-BOX_SIZE = 24      # Bounding box size
-TRAIN_SPLIT = 0.8  # Train/val split
+TRUST = 4        
+BOX_SIZE = 24      
+TRAIN_SPLIT = 0.8  
 DATA_PATH = "/home/ubuntu/yolo/BYU-dataset/"
 TRAIN_DIR = os.path.join(DATA_PATH, "train")
 LABELS_CSV = os.path.join(DATA_PATH, "train_labels.csv")
@@ -139,13 +139,9 @@ def train_model(yaml_path):
 
 # Main execution
 if __name__ == "__main__":
-    # Process dataset
     process_byu_dataset()
-    
-    # Create YAML config
     yaml_path = create_yaml_config()
     
-    # Train model
     print("Starting training...")
     model = train_model(yaml_path)
     print("Training completed!")

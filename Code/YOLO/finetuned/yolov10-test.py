@@ -10,6 +10,7 @@ from contextlib import contextmanager, nullcontext
 from ultralytics import YOLO
 import time
 
+# Update these paths before running
 model_path = "/home/ubuntu/yolo/best.pt"
 CONFIDENCE_THRESHOLD = 0.40
 MAX_DETECTIONS_PER_TOMO = 3

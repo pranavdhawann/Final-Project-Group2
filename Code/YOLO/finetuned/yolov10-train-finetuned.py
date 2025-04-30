@@ -10,15 +10,13 @@ import torch
 import random
 from ultralytics import YOLO
 
-# Set seeds
 np.random.seed(42)
 random.seed(42)
 torch.manual_seed(42)
 
-# Configuration
-TRUST = 6          # Increased slices around motor
-BOX_SIZE = 24      # Bounding box size (consider making adaptive)
-TRAIN_SPLIT = 0.8  # Train/val split
+TRUST = 6          
+BOX_SIZE = 24     
+TRAIN_SPLIT = 0.8  
 DATA_PATH = "/home/ubuntu/yolo/BYU-dataset/"
 TRAIN_DIR = os.path.join(DATA_PATH, "train")
 LABELS_CSV = os.path.join(DATA_PATH, "train_labels.csv")
@@ -75,7 +73,6 @@ def process_byu_dataset():
                     dest_file = f"BYU_{tomo_id}_z{z:04d}.jpg"
                     Image.fromarray(normalized).save(os.path.join(img_dir, dest_file))
                     
-                    # Convert coordinates to YOLO format
                     x_center = motor['Motor axis 2'] / img.width
                     y_center = motor['Motor axis 1'] / img.height
                     box_w = BOX_SIZE / img.width
@@ -104,12 +101,12 @@ def create_yaml_config():
         yaml.dump(yaml_content, f)
     return yaml_path
 
-# Enhanced training configuration (using YOLOv10 checkpoint)
+# Training configuration 
 TRAINING_CONFIG = {
     "epochs": 300,
     "batch_size": 32,
-    "img_size": 640,
-    "pretrained_weights": "yolov10x.pt",  # ← updated to YOLOv10
+    "img_size": 960,
+    "pretrained_weights": "yolov10x.pt",  
     "optimizer": "SGD",
     "lr0": 0.01,
     "momentum": 0.937,
@@ -128,7 +125,6 @@ TRAINING_CONFIG = {
 
 def train_model(yaml_path):
     """Train YOLO model on BYU dataset."""
-    # Load YOLOv10 model weights
     model = YOLO(TRAINING_CONFIG["pretrained_weights"])
     
     results = model.train(
@@ -153,24 +149,16 @@ def train_model(yaml_path):
         exist_ok=True
     )
     
-    # Validate with TTA
     model.val(data=yaml_path, augment=True)
-    
     return model
 
 # Main execution
 if __name__ == "__main__":
-    # Process dataset
     process_byu_dataset()
-    
-    # Create YAML config
     yaml_path = create_yaml_config()
     
-    # Train model
     print("Starting training with YOLOv10...")
     model = train_model(yaml_path)
     
-    # Export to ONNX
     model.export(format="onnx")
-    
     print("Training completed! Model saved and exported.")

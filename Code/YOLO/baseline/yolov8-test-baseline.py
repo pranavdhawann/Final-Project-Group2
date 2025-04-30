@@ -1,30 +1,25 @@
-
 import os
 from ultralytics import YOLO
 
 # === Configuration ===
 # Update these paths before running
-WEIGHTS = "runs/train/byu_training/weights/best.pt"
-SOURCE = "/path/to/test_images"
+WEIGHTS = ""
+SOURCE = ""
 OUTPUT_DIR = "runs/test_predict"
-EXPERIMENT_NAME = "exp"
+EXPERIMENT_NAME = "exp_yolov8"
 
-# Inference parameters
 IMG_SIZE = 512
 CONF_THRESHOLD = 0.25
 IOU_THRESHOLD = 0.45
-SAVE_TXT = True     # Save bounding boxes as YOLO-format .txt files
-SAVE_CONF = True    # Include confidence scores in .txt labels
+SAVE_TXT = True     
+SAVE_CONF = True    
 
 def main():
-    # Create output directory
     save_path = os.path.join(OUTPUT_DIR, EXPERIMENT_NAME)
     os.makedirs(save_path, exist_ok=True)
 
-    # Load model
     model = YOLO(WEIGHTS)
 
-    # Run inference
     _ = model.predict(
         source=SOURCE,
         imgsz=IMG_SIZE,
