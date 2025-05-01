@@ -11,6 +11,9 @@ from ultralytics import YOLO
 import streamlit as st
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
+import warnings
+warnings.filterwarnings("ignore")
+
 sys.path.insert(
     0,
     os.path.abspath(
